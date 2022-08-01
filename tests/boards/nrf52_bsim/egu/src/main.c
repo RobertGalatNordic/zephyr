@@ -104,15 +104,17 @@ struct SWI_trigger_assert_parameter{
 	uint32_t call_count;
 };
 
+static struct SWI_trigger_assert_parameter event_triggered_flag;
+
 void SWI5_trigger_function(const void * param)
 {
-	struct SWI_trigger_assert_parameter* parameters = (struct SWI_trigger_assert_parameter*) param;
-	parameters->call_count++;
+	TEST_MESSAGE("called_SWI5 trigger function!");
+	event_triggered_flag.call_count++;
 	for(uint8_t i=0; i<nrf_egu_channel_count(NRF_EGU5);i++)
 	{
 		const nrf_egu_event_t check_event = nrf_egu_triggered_event_get(i);
-		parameters->triggered[i] = nrf_egu_event_check(NRF_EGU5, check_event);
-		if(parameters->triggered[i])
+		event_triggered_flag.triggered[i] = nrf_egu_event_check(NRF_EGU5, check_event);
+		if(event_triggered_flag.triggered[i])
 		{
 			nrf_egu_event_clear(NRF_EGU5, check_event);
 		}
@@ -122,18 +124,62 @@ void SWI5_trigger_function(const void * param)
 // TODO : test with trigger not enabled event
 
 
-void test_nrf_egu_task_trigger(void)
+void test_nrf_egu_task_trigger_not_int(void)
 {
-	nrf_egu_int_enable(NRF_EGU5, NRF_EGU_INT_TRIGGERED0);
-	TEST_ASSERT_EQUAL(NRF_EGU_INT_TRIGGERED0, nrf_egu_int_enable_check(NRF_EGU5, NRF_EGU_INT_TRIGGERED0));
-	struct SWI_trigger_assert_parameter event_triggered_flag = {0};
-	irq_connect_dynamic(SWI5_EGU5_IRQn, 0, SWI5_trigger_function, &event_triggered_flag, BIT(0));
+	nrf_egu_int_disable(NRF_EGU5, NRF_EGU_INT_TRIGGERED1);
+	TEST_ASSERT_EQUAL(0, nrf_egu_int_enable_check(NRF_EGU5, NRF_EGU_INT_TRIGGERED1));
+	memset(&event_triggered_flag, 0, sizeof(event_triggered_flag));
+	irq_connect_dynamic(SWI5_EGU5_IRQn, 0, SWI5_trigger_function, NULL, BIT(0));
 	irq_enable(SWI5_EGU5_IRQn);
 	nrf_egu_task_t task_to_trigger = nrf_egu_trigger_task_get(0);
 
 	nrf_egu_task_trigger(NRF_EGU5, task_to_trigger);
 
-	k_sleep(K_MSEC(1));
+	// k_sleep(K_MSEC(1));
+	irq_disable(SWI5_EGU5_IRQn);
+	nrf_egu_int_disable(NRF_EGU5, NRF_EGU_INT_TRIGGERED1);
+
+	TEST_ASSERT_EQUAL(0, event_triggered_flag.call_count);
+
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[0]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[1]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[2]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[3]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[4]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[5]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[6]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[7]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[8]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[9]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[10]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[11]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[12]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[13]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[14]);
+	TEST_ASSERT_FALSE(event_triggered_flag.triggered[15]);
+
+	TEST_ASSERT_TRUE(nrf_egu_event_check(NRF_EGU5, nrf_egu_triggered_event_get(0)));
+	for(uint8_t i=1; i<nrf_egu_channel_count(NRF_EGU5);i++)
+	{
+		const nrf_egu_event_t check_event = nrf_egu_triggered_event_get(i);
+		TEST_ASSERT_FALSE(nrf_egu_event_check(NRF_EGU5, check_event));
+	}
+}
+
+void test_nrf_egu_task_trigger(void)
+{
+	nrf_egu_int_enable(NRF_EGU5, NRF_EGU_INT_TRIGGERED0);
+	TEST_ASSERT_EQUAL(NRF_EGU_INT_TRIGGERED0, nrf_egu_int_enable_check(NRF_EGU5, NRF_EGU_INT_TRIGGERED0));
+	memset(&event_triggered_flag, 0, sizeof(event_triggered_flag));
+	irq_connect_dynamic(SWI5_EGU5_IRQn, 0, SWI5_trigger_function, NULL, BIT(0));
+	irq_enable(SWI5_EGU5_IRQn);
+	TEST_MESSAGE("Trigger");
+	nrf_egu_task_t task_to_trigger = nrf_egu_trigger_task_get(0);
+	nrf_egu_task_trigger(NRF_EGU5, task_to_trigger);
+
+	// k_sleep(K_MSEC(1));
+	k_busy_wait(1000);
+	TEST_MESSAGE("disable");
 	irq_disable(SWI5_EGU5_IRQn);
 	nrf_egu_int_disable(NRF_EGU5, NRF_EGU_INT_TRIGGERED0);
 
@@ -169,11 +215,12 @@ void test_nrf_egu_task_configure_not_trigger(void)
 	TEST_ASSERT_EQUAL(NRF_EGU_INT_TRIGGERED0, egu_int_mask);
 	nrf_egu_int_enable(NRF_EGU5, egu_int_mask);
 	TEST_ASSERT_EQUAL(egu_int_mask, nrf_egu_int_enable_check(NRF_EGU5, egu_int_mask));
-	struct SWI_trigger_assert_parameter event_triggered_flag = {0};
-	irq_connect_dynamic(SWI5_EGU5_IRQn, 0, SWI5_trigger_function, &event_triggered_flag, BIT(0));
+	memset(&event_triggered_flag, 0, sizeof(event_triggered_flag));
+	irq_connect_dynamic(SWI5_EGU5_IRQn, 0, SWI5_trigger_function, NULL, BIT(0));
 	irq_enable(SWI5_EGU5_IRQn);
 
-	k_sleep(K_MSEC(1));
+	// k_sleep(K_MSEC(1));
+	k_busy_wait(1000);
 	irq_disable(SWI5_EGU5_IRQn);
 	nrf_egu_int_disable(NRF_EGU5, egu_int_mask);
 
