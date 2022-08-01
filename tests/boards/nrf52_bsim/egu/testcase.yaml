@@ -1,0 +1,4 @@
+# Test of the posix_arch k_busy_wait & cpu_hold() functionality
+tests:
+  boards.nrf52_bsim.egu:
+    platform_allow: nrf52840dk_nrf52840 nrf52_bsim
